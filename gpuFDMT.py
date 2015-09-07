@@ -13,11 +13,13 @@ nchan   = 4096
 maxDT   = 8192
 T       = 61440
 fs, df  = np.linspace(fmin,fmax,nchan,endpoint=False,retstep=True)
+
 I       = None  # input
 A       = None  # working area (GPU) 
 B       = None  # loading stage (GPU)
 ch_gulp = 64    # channels loaded at once 
 plan    = None  # GPU execution plan
+
 negative_DMs = False
 cor = df/32
 
