@@ -118,7 +118,8 @@ def fdmt_iteration(src,dest,i):
 maxDepth = None
 def recursive_fdmt(I,depth=0,curMax=0):
     "Performs FDMT, downsamples and repeats recursively, returning max sigma"
-    global maxDepth ; if maxDepth is None: maxDepth = depth
+    global maxDepth
+    if maxDepth is None: maxDepth = depth
     curMax = max(curMax, fdmt(I,twoPass=True,downfact=maxDepth-depth))
     if depth <= 0: 
         maxDepth = None
