@@ -101,15 +101,12 @@ def fdmt_iteration(src,dest,i):
         f0  = f_starts[i_F]
         f1  = f_mids[i_F]
         f2  = f_ends[i_F]
-        C = (f1**-2-f0**-2)/(f2**-2-f0**-2)
-        cor = df/16
+        cor = 0
         C01 = ((f1-cor)**-2-f0**-2)/(f2**-2-f0**-2)
         C12 = ((f1+cor)**-2-f0**-2)/(f2**-2-f0**-2)
-        subMax0 = subDT(f0,dF/2)
-        subMax1 = subDT(f1,dF/2)
         for i_dT in xrange(subDT(f0,dF)):
-            dT_mid01 = round(i_dT*C01) if i_dT>subMax0 else round(i_dT*C)
-            dT_mid12 = round(i_dT*C12) if i_dT>subMax1 else round(i_dT*C)
+            dT_mid01 = round(i_dT*C01)
+            dT_mid12 = round(i_dT*C12)
             dT_rest = i_dT - dT_mid12
             dest[Q[i][i_F]+i_dT,:] = src[Q[i-1][2*i_F]+dT_mid01,:]
             dest[Q[i][i_F]+i_dT,dT_mid12:] += \
