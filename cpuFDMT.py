@@ -5,10 +5,9 @@ import numpy as np
 from time import time
 
 verbose = False
-doWeighting = True
 
 #fmin, fmax, nchan, maxDT = 400.00, 800.00, 4096, 8192  # Full band
-fmin, fmax, nchan, maxDT = 593.75, 606.25, 128, 256  # Test band
+fmin, fmax, nchan, maxDT = 593.75, 606.25, 128, 1024  # Test band
 fs,df = np.linspace(fmin,fmax,nchan,endpoint=False,retstep=True)
 
 def subDT(f,dF=df):
@@ -44,15 +43,14 @@ def prep(cols,dtype=np.uint32):
     buildQ()
 
 
-def fdmt(I,returnMaxSigma=True):
-    "Computes DM Transform"
+def fdmt(I,twoPass=False,downfact=0):
+    "Computes DM Transform. If twoPass, returns maximum sigma, else returns transform"
     if I.dtype.itemsize < 4: I = I.astype(np.uint32)
-    
-    if A is None or A.shape[1] != I.shape[1] or A.dtype != I.dtype:
+    if A is None or A.shape[1] != I.shape[1] or A.dtype != I.dtype or True:
         prep(I.shape[1],I.dtype)
-    
+   
     t1 = time()
-    fdmt_initialize(I)
+    fdmt_initialize(I,doWeighting=twoPass,downfact=downfact)
     
     t2 = time()
     for i in xrange(1,int(np.log2(nchan))+1):
@@ -66,41 +64,35 @@ def fdmt(I,returnMaxSigma=True):
         print "Total time: %.2f s" % (t3-t1)
     
     DMT = dest[:maxDT]
-    #return DMT.max()
-    if returnMaxSigma:
-        maxSigma = 0
-        maxRow = 0
-        r1 = DMT[0].std()
-        r0 = DMT[0].mean()
-        for i in xrange(maxDT):
-            r = DMT[i,i:]
-            R = (r.max()-r.mean())/r.std()
-            if R > maxSigma:
-                maxSigma = R
-                maxRow = i
-            #maxSigma = max(maxSigma,r.std()) 
-        if verbose: print "Maximum sigma value: %.3f" % maxSigma
-        return maxSigma #DMT[maxRow,maxRow:].std()
+    if twoPass:
+        noiseRMS  = np.array([DMT[i,i:].std()  for i in xrange(maxDT)])
+        noiseMean = np.array([DMT[i,i:].mean() for i in xrange(maxDT)])
+        rawDMT = fdmt(I,twoPass=False)
+        sigmi = (rawDMT.T - noiseMean)/noiseRMS
+        if verbose: print "Maximum sigma value: %.3f" % sigmi.max()
+        return sigmi.max()
     else:
-        return dest[:maxDT]
+        return DMT
 
 
-def fdmt_initialize(I):
-    chDTs = subDT(fs)
-    DTsteps = np.where(chDTs[:-1]-chDTs[1:] != 0)[0]
+def fdmt_initialize(I,doWeighting=False,downfact=0):
     A[Q[0],:] = I
-    A[Q[0]+1,1:] = A[Q[0],1:] + I[:,:-1]
-    for i,s in enumerate(DTsteps[::-1]):
-        A[Q[0][:s]+i+2,i+2:] = A[Q[0][:s]+i+1,i+2:] + I[:s,:-i-2]
+    chDTs     = subDT(fs)
+    T         = I.shape[1]
+    commonDTs = [T for _ in xrange(1,chDTs.min())] 
+    DTsteps   = list(np.where(chDTs[:-1]-chDTs[1:] != 0)[0])
+    DTplan    = commonDTs + DTsteps[::-1]
+    for i,t in enumerate(DTplan,1):
+        A[Q[0][:t]+i,i:] = A[Q[0][:t]+i-1,i:]+I[:t,:-i]
     
     if doWeighting:
-        A[Q[0]+1,1:] /= np.sqrt(2.)
-        for i,s in enumerate(DTsteps[::-1]):
-            A[Q[0][:s]+i+2,i+2:] /= np.sqrt(float(i+2))
+        if downfact > 0: A[:] /= np.sqrt(2.*downfact)
+        for i,t in enumerate(DTplan,1):
+            A[Q[0][:t]+i,i:] /= np.sqrt(float(i))
     
 
 def fdmt_iteration(src,dest,i):
-    T        = A.shape[1]
+    T        = src.shape[1]
     dF       = df*2**i
     f_starts = fs[::2**i]
     f_ends   = f_starts + dF
@@ -112,23 +104,28 @@ def fdmt_iteration(src,dest,i):
         C = (f1**-2-f0**-2)/(f2**-2-f0**-2)
         cor = df/16
         C01 = ((f1-cor)**-2-f0**-2)/(f2**-2-f0**-2)
-        C12 = ((f1+cor)**-2-f0**-2)/(f2**-2-f0**-2)   
+        C12 = ((f1+cor)**-2-f0**-2)/(f2**-2-f0**-2)
+        subMax0 = subDT(f0,dF/2)
+        subMax1 = subDT(f1,dF/2)
         for i_dT in xrange(subDT(f0,dF)):
-            dT_mid01 = round(i_dT * C01) if i_dT > subDT(f0,dF)/2 else round(i_dT * C)
-            dT_mid12 = round(i_dT * C12) if i_dT > subDT(f1,dF)/2 else round(i_dT * C)
+            dT_mid01 = round(i_dT*C01) if i_dT>subMax0 else round(i_dT*C)
+            dT_mid12 = round(i_dT*C12) if i_dT>subMax1 else round(i_dT*C)
             dT_rest = i_dT - dT_mid12
             dest[Q[i][i_F]+i_dT,:] = src[Q[i-1][2*i_F]+dT_mid01,:]
             dest[Q[i][i_F]+i_dT,dT_mid12:] += \
                     src[Q[i-1][2*i_F+1]+dT_rest,:T-dT_mid12]
 
-
-def recursive_fdmt(I,curMax=0,depth=2):
+maxDepth = None
+def recursive_fdmt(I,depth=0,curMax=0):
     "Performs FDMT, downsamples and repeats recursively, returning max sigma"
-    curMax = max(curMax, fdmt(I,returnMaxSigma=True))
-    if depth <= 0: return curMax
-    I2  = I[:,::2]+I[:,1::2] if (I.shape[1]%2 == 0) else I[:,:-1:2]+I[:,1::2]
-    if doWeighting: I2 /= np.sqrt(2.)
-    return recursive_fdmt(I2,curMax,depth-1)
+    global maxDepth ; if maxDepth is None: maxDepth = depth
+    curMax = max(curMax, fdmt(I,twoPass=True,downfact=maxDepth-depth))
+    if depth <= 0: 
+        maxDepth = None
+        return curMax
+    else:
+        I2  = I[:,::2]+I[:,1::2] if (I.shape[1]%2 == 0) else I[:,:-1:2]+I[:,1::2]
+        return recursive_fdmt(I2,depth-1,curMax)
 
 
 if __name__ == '__main__':
