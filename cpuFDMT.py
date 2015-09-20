@@ -7,7 +7,7 @@ from time import time
 verbose = False
 
 #fmin, fmax, nchan, maxDT = 400.00, 800.00, 4096, 8192  # Full band
-fmin, fmax, nchan, maxDT = 593.75, 606.25, 128, 1024  # Test band
+fmin, fmax, nchan, maxDT = 593.75, 606.25, 128, 1024 # Test band
 fs,df = np.linspace(fmin,fmax,nchan,endpoint=False,retstep=True)
 
 def subDT(f,dF=df):
@@ -48,7 +48,7 @@ def fdmt(I,twoPass=False,downfact=0):
     if I.dtype.itemsize < 4: I = I.astype(np.uint32)
     if A is None or A.shape[1] != I.shape[1] or A.dtype != I.dtype or True:
         prep(I.shape[1],I.dtype)
-   
+     
     t1 = time()
     fdmt_initialize(I,doWeighting=twoPass,downfact=downfact)
     
@@ -62,7 +62,7 @@ def fdmt(I,twoPass=False,downfact=0):
         print "Initializing time:  %.2f s" % (t2-t1)
         print "Iterating time:  %.2f s" % (t3-t2)
         print "Total time: %.2f s" % (t3-t1)
-    
+
     DMT = dest[:maxDT]
     if twoPass:
         noiseRMS  = np.array([DMT[i,i:].std()  for i in xrange(maxDT)])
@@ -101,16 +101,15 @@ def fdmt_iteration(src,dest,i):
         f0  = f_starts[i_F]
         f1  = f_mids[i_F]
         f2  = f_ends[i_F]
-        cor = 0
-        C01 = ((f1-cor)**-2-f0**-2)/(f2**-2-f0**-2)
-        C12 = ((f1+cor)**-2-f0**-2)/(f2**-2-f0**-2)
+        C   = (f1**-2-f0**-2)/(f2**-2-f0**-2)
         for i_dT in xrange(subDT(f0,dF)):
-            dT_mid01 = round(i_dT*C01)
-            dT_mid12 = round(i_dT*C12)
+            dT_mid01 = round(i_dT*C)
+            dT_mid12 = np.floor(i_dT*C)
             dT_rest = i_dT - dT_mid12
             dest[Q[i][i_F]+i_dT,:] = src[Q[i-1][2*i_F]+dT_mid01,:]
             dest[Q[i][i_F]+i_dT,dT_mid12:] += \
                     src[Q[i-1][2*i_F+1]+dT_rest,:T-dT_mid12]
+
 
 maxDepth = None
 def recursive_fdmt(I,depth=0,curMax=0):
