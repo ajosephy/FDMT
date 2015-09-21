@@ -69,6 +69,7 @@ def fdmt(I,twoPass=False,downfact=0):
         noiseMean = np.array([DMT[i,i:].mean() for i in xrange(maxDT)])
         rawDMT = fdmt(I,twoPass=False)
         sigmi = (rawDMT.T - noiseMean)/noiseRMS
+        # If this twoPass business feels like cheating, set rawDMT=DMT.
         if verbose: print "Maximum sigma value: %.3f" % sigmi.max()
         return sigmi.max()
     else:
@@ -103,7 +104,7 @@ def fdmt_iteration(src,dest,i):
         f2  = f_ends[i_F]
         C   = (f1**-2-f0**-2)/(f2**-2-f0**-2)
         for i_dT in xrange(subDT(f0,dF)):
-            dT_mid01 = round(i_dT*C)
+            dT_mid01 = np.ceil(i_dT*C)
             dT_mid12 = np.floor(i_dT*C)
             dT_rest = i_dT - dT_mid12
             dest[Q[i][i_F]+i_dT,:] = src[Q[i-1][2*i_F]+dT_mid01,:]
