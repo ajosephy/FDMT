@@ -67,7 +67,7 @@ def fdmt(I,retDMT=False):
     if retDMT: return DMT
     noiseRMS  = np.array([DMT[i,i:].std()  for i in xrange(maxDT)])
     noiseMean = np.array([DMT[i,i:].mean() for i in xrange(maxDT)])
-    sigmi = (DMT.T - noiseMean)/noiseRMS
+    sigmi = (rawDMT.T - noiseMean)/noiseRMS
     if verbose: print "Maximum sigma value: %.3f" % sigmi.max()
     return sigmi.max()
 
@@ -95,19 +95,14 @@ def fdmt_iteration(src,dest,i):
         f0  = f_starts[i_F]
         f1  = f_mids[i_F]
         f2  = f_ends[i_F]
+        cor = 0
         C   = (f1**-2-f0**-2)/(f2**-2-f0**-2)
-        cor = df/2
-        C01 = ((f1-cor)**-2-f0**-2)/(f2**-2-f0**-2)
-        C12 = ((f1+cor)**-2-f0**-2)/(f2**-2-f0**-2)
+        C01   = ((f1-cor)**-2-f0**-2)/(f2**-2-f0**-2)
+        C12   = ((f1+cor)**-2-f0**-2)/(f2**-2-f0**-2)
         for i_dT in xrange(subDT(f0,dF)):
-            if i_dT*(C12-C01) > 1.1 and False:
-                dT_mid01 = np.round(i_dT*C)
-                dT_mid12 = np.floor(i_dT*C)
-            else:
-                dT_mid01 = np.ceil(i_dT*C)
-                dT_mid12 = np.floor(i_dT*C)
+            dT_mid01 = round(i_dT*C01)
+            dT_mid12 = round(i_dT*C12)
             dT_rest = i_dT - dT_mid12
-            assert(dT_rest >= 0)
             dest[Q[i][i_F]+i_dT,:] = src[Q[i-1][2*i_F]+dT_mid01,:]
             dest[Q[i][i_F]+i_dT,dT_mid12:] += \
                     src[Q[i-1][2*i_F+1]+dT_rest,:T-dT_mid12]
