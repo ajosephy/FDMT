@@ -67,7 +67,7 @@ def fdmt(I,retDMT=False):
     if retDMT: return DMT
     noiseRMS  = np.array([DMT[i,i:].std()  for i in xrange(maxDT)])
     noiseMean = np.array([DMT[i,i:].mean() for i in xrange(maxDT)])
-    sigmi = (rawDMT.T - noiseMean)/noiseRMS
+    sigmi = (DMT.T - noiseMean)/noiseRMS
     if verbose: print "Maximum sigma value: %.3f" % sigmi.max()
     return sigmi.max()
 
